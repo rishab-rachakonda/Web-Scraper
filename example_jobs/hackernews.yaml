@@ -1,0 +1,39 @@
+name: hackernews
+description: Scrape Hacker News front page stories
+
+urls:
+  - https://news.ycombinator.com
+
+mode: http
+
+rules:
+  - name: titles
+    selector: .titleline > a
+    multiple: true
+  - name: links
+    selector: .titleline > a
+    attribute: href
+    multiple: true
+  - name: scores
+    selector: .score
+    multiple: true
+  - name: authors
+    selector: .hnuser
+    multiple: true
+  - name: comments
+    selector: .subtext a[href*="item"]
+    multiple: true
+
+rate_limit:
+  requests_per_second: 1.0
+  delay_between_requests: 1.0
+
+retry:
+  max_retries: 3
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/hackernews
+
+# Uncomment to run on a schedule (every hour):
+# schedule: "0 * * * *"

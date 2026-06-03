@@ -1,0 +1,34 @@
+# Output schema: news article / blog post
+# Reference in a job file with:  output_schema: schemas/article.yaml
+
+name: article
+description: Structured content from a news article or blog post
+
+fields:
+  - name: title
+    selector: "h1, [itemprop='headline'], .article-title, .post-title"
+
+  - name: author
+    selector: "[itemprop='author'], .author, [rel='author'], [class*='byline']"
+
+  - name: published_at
+    selector: "time[datetime], [itemprop='datePublished']"
+    attribute: datetime       # pull the machine-readable datetime attribute
+
+  - name: body
+    selector: "article, [itemprop='articleBody'], .post-content, .article-body, main"
+
+  - name: summary
+    selector: "[itemprop='description'], meta[name='description'], .article-summary"
+    attribute: content        # <meta content="..."> uses the content attribute
+
+  - name: tags
+    selector: ".tags a, [rel='tag'], [class*='tag'] a, [class*='label'] a"
+    multiple: true
+
+  - name: image_url
+    selector: "[itemprop='image'], .hero-image img, .featured-image img, article img"
+    attribute: src
+
+  - name: source
+    selector: "[itemprop='publisher'] [itemprop='name'], .site-name, .publication"

@@ -1,0 +1,30 @@
+# Auto-pagination demo — scrapes every page of a multi-page listing.
+#
+# The scraper detects the "Next" button automatically (no config needed),
+# or you can pin the URL param if you know it (url_param: page).
+
+name: paginated_crawl
+description: Auto-follow pagination across a multi-page result set
+
+urls:
+  - https://books.toscrape.com
+
+mode: http
+concurrency: 5
+adaptive_rate: true
+
+pagination:
+  auto: true
+  max_pages: 50
+  # url_param: page        # uncomment if URL uses ?page=N
+  # next_selector: "a.next" # uncomment to override auto-detection
+
+output_schema: schemas/search_results.yaml
+
+rate_limit:
+  requests_per_second: 3.0
+  delay_between_requests: 0.3
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/books

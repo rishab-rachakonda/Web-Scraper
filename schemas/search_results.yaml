@@ -1,0 +1,30 @@
+# Output schema: search / listing page (multiple items)
+# Reference in a job file with:  output_schema: schemas/search_results.yaml
+#
+# NOTE: "multiple: true" on every field returns all matching elements as lists.
+# Align the selectors so the Nth element of each list belongs to the same result.
+
+name: search_results
+description: Items extracted from a search or listing page
+
+fields:
+  - name: titles
+    selector: "h2 a, h3 a, .result-title a, [class*='title'] a"
+    multiple: true
+
+  - name: urls
+    selector: "h2 a, h3 a, .result-title a, [class*='title'] a"
+    attribute: href
+    multiple: true
+
+  - name: descriptions
+    selector: ".result-snippet, .description, [class*='summary'], p.snippet"
+    multiple: true
+
+  - name: prices
+    selector: "[class*='price'], [itemprop='price']"
+    multiple: true
+
+  - name: ratings
+    selector: "[class*='rating'], [itemprop='ratingValue']"
+    multiple: true

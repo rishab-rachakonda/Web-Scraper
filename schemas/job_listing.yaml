@@ -1,0 +1,40 @@
+# Output schema: job listing page
+# Reference in a job file with:  output_schema: schemas/job_listing.yaml
+
+name: job_listing
+description: Job posting details
+
+fields:
+  - name: title
+    selector: "h1, [class*='job-title'], [class*='position-title']"
+
+  - name: company
+    selector: "[class*='company'], [class*='employer'], [itemprop='hiringOrganization'] [itemprop='name']"
+
+  - name: location
+    selector: "[class*='location'], [class*='job-location'], [itemprop='jobLocation']"
+
+  - name: employment_type
+    selector: "[class*='employment-type'], [class*='job-type'], [itemprop='employmentType']"
+
+  - name: salary
+    selector: "[class*='salary'], [class*='compensation'], [itemprop='baseSalary']"
+
+  - name: description
+    selector: "[class*='job-description'], [class*='description'], [itemprop='description']"
+
+  - name: requirements
+    selector: "[class*='requirements'] li, [class*='qualifications'] li"
+    multiple: true
+
+  - name: benefits
+    selector: "[class*='benefits'] li, [class*='perks'] li"
+    multiple: true
+
+  - name: apply_url
+    selector: "a[class*='apply'], a[href*='apply'], a[class*='btn-apply']"
+    attribute: href
+
+  - name: posted_at
+    selector: "time[datetime], [class*='posted'], [class*='date-posted']"
+    attribute: datetime

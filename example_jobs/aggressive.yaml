@@ -1,0 +1,55 @@
+# "Scrape the shit out of anything" — all features on.
+#
+# Demonstrates:
+#   - TLS fingerprinting (bypasses Cloudflare/Akamai bot checks)
+#   - Stealth browser mode (hides automation signals in JS)
+#   - Auto-pagination (follows "Next" links automatically)
+#   - Adaptive rate limiting (speeds up on success, backs off on 429)
+#   - 10 parallel browser pages
+#   - Real-time webhook push
+
+name: aggressive
+description: Max-power scrape with every anti-bot feature enabled
+
+urls:
+  - https://quotes.toscrape.com
+
+mode: auto
+stealth: true
+tls_impersonate: chrome124   # impersonate Chrome 124 at TLS level
+concurrency: 10
+adaptive_rate: true
+
+pagination:
+  auto: true
+  max_pages: 20
+
+rules:
+  - name: quotes
+    selector: span.text
+    multiple: true
+  - name: authors
+    selector: small.author
+    multiple: true
+  - name: tags
+    selector: a.tag
+    multiple: true
+
+rate_limit:
+  requests_per_second: 5.0
+  burst: 10
+  delay_between_requests: 0.1
+
+retry:
+  max_retries: 5
+  backoff_factor: 2.0
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/aggressive
+
+# Uncomment to stream results to a webhook in real time:
+# webhook:
+#   url: https://your-server.com/scrape-results
+#   method: POST
+#   batch_size: 5

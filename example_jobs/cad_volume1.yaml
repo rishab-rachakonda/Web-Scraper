@@ -1,0 +1,47 @@
+# Constituent Assembly Debates — Volume 1, FULL transcripts.
+#
+# Starts at the Volume 1 index, follows every "DD Mon YYYY" debate link,
+# and scrapes the entire debate text from each page.
+#   Index page  -> depth 0 (list of 11 debates)
+#   Each debate -> depth 1 (full transcript via .prose blocks)
+
+name: cad_volume1
+description: Full text of all Volume 1 Constituent Assembly Debates
+
+urls:
+  - https://www.constitutionofindia.net/constituent-assembly-debate/volume-1/
+
+mode: http
+concurrency: 4
+adaptive_rate: true
+
+# Follow each debate link one hop deep.
+follow_links: true
+link_selector: 'li a[href*="/debates/"]'
+max_depth: 1
+max_pages: 50
+
+rules:
+  # On a debate page this is the date heading ("09 Dec 1946").
+  - name: title
+    selector: h1
+    transform: strip
+
+  # The full transcript: every paragraph/speech block in the debate body.
+  - name: transcript
+    selector: main .prose
+    multiple: true
+
+rate_limit:
+  requests_per_second: 3.0
+  burst: 5
+  delay_between_requests: 0.2
+
+retry:
+  max_retries: 4
+  backoff_factor: 2.0
+  retry_on_status: [403, 429, 500, 502, 503]
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/cad_volume1

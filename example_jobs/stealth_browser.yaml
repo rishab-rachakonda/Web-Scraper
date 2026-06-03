@@ -1,0 +1,40 @@
+# Stealth browser — for JS-heavy SPAs with aggressive bot detection.
+#
+# Patches every known Playwright detection signal:
+#   navigator.webdriver, chrome.runtime, plugins, WebGL vendor/renderer,
+#   hardware concurrency, device memory, platform, iframe contentWindow,
+#   Permissions API — plus playwright-stealth if installed.
+
+name: stealth_browser
+description: Fully stealthed Chromium for JS-rendered pages
+
+urls:
+  - https://quotes.toscrape.com/js/   # JS-rendered version
+
+mode: browser
+stealth: true
+concurrency: 3           # 3 parallel browser tabs
+adaptive_rate: true
+
+pagination:
+  auto: true
+  max_pages: 10
+
+rules:
+  - name: quotes
+    selector: .quote .text
+    multiple: true
+  - name: authors
+    selector: .quote .author
+    multiple: true
+
+rate_limit:
+  requests_per_second: 2.0
+  delay_between_requests: 0.5
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/stealth
+
+# Use your own browser's logged-in session:
+# cookies_from: chrome      # or firefox, edge, brave

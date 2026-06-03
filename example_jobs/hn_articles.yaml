@@ -1,0 +1,16 @@
+name: hn_articles
+description: Scrape HN front page and extract each story as a structured article
+
+urls:
+  - https://news.ycombinator.com
+
+mode: http
+output_schema: schemas/search_results.yaml   # Claude extracts a list of items
+
+rate_limit:
+  requests_per_second: 1.0
+  delay_between_requests: 1.0
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/hn_articles

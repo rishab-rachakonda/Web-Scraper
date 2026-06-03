@@ -1,0 +1,44 @@
+# Output schema: e-commerce product page
+# Defines WHAT fields to return and HOW to find them (CSS / XPath / regex).
+# Reference in a job file with:  output_schema: schemas/product.yaml
+
+name: product
+description: Product details from an e-commerce page
+
+fields:
+  - name: title
+    selector: "h1"
+
+  - name: price
+    selector: ".price, [class*='price'], [itemprop='price']"
+    transform: float          # strips non-numeric chars, returns a number
+
+  - name: rating
+    selector: "[itemprop='ratingValue'], .rating, [class*='rating']"
+    transform: float
+
+  - name: review_count
+    selector: "[itemprop='reviewCount'], [class*='review-count'], [class*='reviewCount']"
+    transform: int
+
+  - name: description
+    selector: "[itemprop='description'], .product-description, #description"
+
+  - name: sku
+    selector: "[itemprop='sku'], [class*='sku'], [class*='product-id']"
+
+  - name: brand
+    selector: "[itemprop='brand'], .brand, [class*='brand']"
+
+  - name: features
+    selector: ".features li, .product-features li, ul[class*='feature'] li"
+    multiple: true
+
+  - name: images
+    selector: ".product-image img, [class*='gallery'] img, [itemprop='image']"
+    attribute: src
+    multiple: true
+
+  - name: category
+    selector: ".breadcrumb a, nav[aria-label='breadcrumb'] a"
+    multiple: true

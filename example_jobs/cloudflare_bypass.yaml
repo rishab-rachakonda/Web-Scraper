@@ -1,0 +1,36 @@
+# TLS-fingerprinting bypass — for sites behind Cloudflare, Akamai, DataDome.
+#
+# curl_cffi impersonates a real Chrome browser at the TCP/TLS handshake level,
+# so the WAF sees genuine browser fingerprints before any JS even runs.
+# No Playwright needed — pure HTTP, fast.
+
+name: cloudflare_bypass
+description: HTTP scrape with full TLS browser impersonation
+
+urls:
+  - https://example.com   # replace with your target
+
+mode: http
+tls_impersonate: chrome124   # options: chrome124, chrome110, safari17_0, firefox117
+adaptive_rate: true
+concurrency: 8
+
+rules:
+  - name: title
+    selector: h1
+  - name: links
+    selector: a
+    attribute: href
+    multiple: true
+
+rate_limit:
+  requests_per_second: 3.0
+  burst: 8
+
+retry:
+  max_retries: 5
+  retry_on_status: [403, 429, 500, 502, 503]
+
+export:
+  formats: [json, terminal]
+  output_dir: output/bypass
