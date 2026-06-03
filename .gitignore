@@ -1,0 +1,29 @@
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Scraper output (data artifacts, not source)
+output/
+
+# Logs / databases
+*.log
+*.sqlite
+*.db
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
