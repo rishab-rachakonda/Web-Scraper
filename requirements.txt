@@ -16,6 +16,10 @@ jmespath>=1.0.1
 openpyxl>=3.1.0          # Excel (.xlsx)
 fpdf2>=2.7.0             # PDF reports
 
+# Web UI (python scraper.py serve)
+fastapi>=0.110.0
+uvicorn>=0.29.0
+
 # Anti-detection / TLS fingerprinting
 curl_cffi>=0.7.0
 

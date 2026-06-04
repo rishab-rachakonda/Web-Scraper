@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greatest Web Scraper</title>
+<style>
+  :root {
+    --bg:#0f1117; --panel:#171a23; --panel2:#1e2230; --line:#2a2f3e;
+    --text:#e7e9ee; --dim:#9aa3b4; --accent:#7c5cff; --accent2:#22d3ee; --ok:#34d399; --err:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.5}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 20px 64px}
+  header h1{font-size:30px;margin:0 0 4px;
+            background:linear-gradient(90deg,var(--accent),var(--accent2));
+            -webkit-background-clip:text;background-clip:text;color:transparent}
+  header p{color:var(--dim);margin:0 0 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  input[type=text]{flex:1;min-width:260px;background:var(--panel2);border:1px solid var(--line);
+                   color:var(--text);padding:13px 15px;border-radius:10px;font-size:15px;outline:none}
+  input[type=text]:focus{border-color:var(--accent)}
+  button{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;border:0;
+         padding:13px 22px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.55;cursor:default}
+  .ghost{background:var(--panel2);border:1px solid var(--line);color:var(--text);font-weight:500;padding:9px 14px;font-size:14px}
+  .adv{margin-top:12px;color:var(--dim);font-size:13px}
+  .adv input{margin-top:8px}
+  .muted{color:var(--dim);font-size:13px}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);
+        border-radius:999px;padding:3px 11px;font-size:12px;color:var(--dim);margin:2px 4px 2px 0}
+  .pill b{color:var(--accent2)}
+  .dl{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:14px;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;
+        max-width:380px;overflow-wrap:anywhere}
+  th{background:var(--panel2);position:sticky;top:0}
+  tr:nth-child(even) td{background:#161922}
+  .spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;
+           border-radius:50%;display:inline-block;vertical-align:-4px;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{color:var(--err)} .hidden{display:none}
+  a.dl-link{text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🕷️ Greatest Web Scraper</h1>
+    <p>Paste a link. Get clean, structured data. Download in any format.</p>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <input id="url" type="text" placeholder="https://books.toscrape.com" autofocus>
+      <button id="go">Scrape</button>
+    </div>
+    <div class="adv">
+      <label>Advanced — CSS selector for the repeating item (optional; auto-detected if blank):</label>
+      <input id="sel" type="text" placeholder=".product, li.card, div.quote …" style="width:100%">
+    </div>
+  </div>
+
+  <div id="status" class="muted"></div>
+
+  <div id="results" class="card hidden">
+    <div id="meta"></div>
+    <div class="dl" id="downloads"></div>
+    <div id="tableWrap"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const FORMATS = [["csv","CSV"],["xlsx","Excel"],["json","JSON"],["jsonl","JSONL"],["pdf","PDF"],["markdown","Markdown"],["html","HTML"]];
+let JOB = null;
+
+async function scrape() {
+  const url = $("#url").value.trim();
+  if (!url) { setStatus("Enter a URL first.", true); return; }
+  $("#go").disabled = true;
+  $("#results").classList.add("hidden");
+  setStatus('<span class="spinner"></span> Scraping & detecting structure…');
+
+  try {
+    const res = await fetch("/api/scrape", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ url, item_selector: $("#sel").value.trim() || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Scrape failed");
+    JOB = data.job_id;
+    render(data);
+    setStatus("");
+  } catch (e) {
+    setStatus("⚠️ " + e.message, true);
+  } finally {
+    $("#go").disabled = false;
+  }
+}
+
+function setStatus(html, isErr) {
+  const s = $("#status"); s.innerHTML = html; s.className = "muted" + (isErr ? " err" : "");
+}
+
+function render(d) {
+  const meta = `
+    <div style="margin-bottom:10px">
+      <span class="pill">items <b>${d.count}</b></span>
+      <span class="pill">fields <b>${d.fields.length}</b></span>
+      ${d.item_selector ? `<span class="pill">selector <b>${escapeHtml(d.item_selector)}</b></span>` : ""}
+    </div>
+    ${d.notes && d.notes.length ? `<div class="muted">🧠 ${d.notes.map(escapeHtml).join(" · ")}</div>` : ""}
+    <div class="muted" style="margin-top:8px">Download as:</div>`;
+  $("#meta").innerHTML = meta;
+
+  $("#downloads").innerHTML = FORMATS.map(([f,label]) =>
+    `<a class="dl-link" href="/api/download/${JOB}?fmt=${f}">
+       <button class="ghost">⬇ ${label}</button></a>`).join("");
+
+  $("#tableWrap").innerHTML = buildTable(d.fields, d.preview, d.preview_truncated, d.count);
+  $("#results").classList.remove("hidden");
+}
+
+function buildTable(fields, rows, truncated, total) {
+  if (!rows.length) return "<p class='muted'>No rows.</p>";
+  const head = "<tr>" + fields.map(f => `<th>${escapeHtml(f)}</th>`).join("") + "</tr>";
+  const body = rows.map(r => "<tr>" + fields.map(f =>
+      `<td>${escapeHtml(fmt(r[f]))}</td>`).join("") + "</tr>").join("");
+  const note = truncated ? `<div class="muted" style="margin-top:8px">Showing first ${rows.length} of ${total} — download for all.</div>` : "";
+  return `<table><thead>${head}</thead><tbody>${body}</tbody></table>${note}`;
+}
+
+function fmt(v){ if (v===null||v===undefined) return ""; if (typeof v==="object") return JSON.stringify(v); return String(v); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+$("#go").addEventListener("click", scrape);
+$("#url").addEventListener("keydown", e => { if (e.key === "Enter") scrape(); });
+$("#sel").addEventListener("keydown", e => { if (e.key === "Enter") scrape(); });
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ A full-featured, async Python web scraper with a beautiful terminal UI — built
 
 ## ✨ Features
 
+- **🌐 Web UI** — paste a link in your browser, preview the data, and download it in any format
 - **🧠 Smart mode** — give it just a URL; it probes the page and auto-picks the transport (HTTP / TLS-impersonation / browser) **and** the extraction schema, only deferring to you where you've set something explicitly
 - **Any site type** — static pages, JavaScript SPAs (Playwright), JSON APIs, auth-required pages
 - **Anti-detection** — TLS fingerprint impersonation (curl_cffi), stealth browser patches, browser-cookie import, proxy rotation
@@ -32,6 +33,9 @@ playwright install chromium        # only needed for browser/stealth mode
 ```
 
 ```bash
+# 🌐 Web UI — paste a link in your browser, preview data, download any format
+python scraper.py serve            # then open http://127.0.0.1:8000
+
 # 🧠 Smart mode — just a URL; it figures out transport + schema itself
 python scraper.py smart https://books.toscrape.com
 
@@ -49,6 +53,16 @@ python scraper.py info
 ```
 
 Output is written to `output/<job_name>/` as `.jsonl` and `.csv`, with a live dashboard in the terminal.
+
+---
+
+## 🌐 Web UI
+
+```bash
+python scraper.py serve            # http://127.0.0.1:8000
+```
+
+Paste a link → it auto-detects the structure and shows a preview table → download as **CSV, Excel, JSON, JSONL, PDF, Markdown, or HTML** with one click. Optionally pin the item selector in the Advanced box. Built on FastAPI; the page is a single dependency-free HTML file.
 
 ---
 
@@ -259,6 +273,7 @@ core/
   engine.py           Orchestrates clients, concurrency, links, pagination, smart mode
 pipeline/exporters.py CSV / Excel / JSON / JSONL / PDF / Markdown / HTML / SQLite / webhook
 ui/dashboard.py       Live Rich TUI dashboard
+web/app.py            FastAPI web UI (paste a link → preview → download)
 scheduler/runner.py   APScheduler cron runner
 example_jobs/         Ready-to-run job files
 schemas/              Reusable rule-based output schemas

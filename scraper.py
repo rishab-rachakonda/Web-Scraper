@@ -407,6 +407,21 @@ def detect(
         console.print("[dim]Tip: re-run with --save example_jobs/%s.yaml to keep it.[/]" % name)
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port to bind"),
+):
+    """[bold bright_magenta]Launch the web UI[/] — paste a link in your browser, get data, download any format."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print("[red]Web UI needs fastapi + uvicorn:[/] pip install fastapi uvicorn")
+        raise typer.Exit(1)
+    console.print(f"[bright_cyan]Greatest Web Scraper UI[/] → [bold]http://{host}:{port}[/]  (Ctrl+C to stop)")
+    uvicorn.run("web.app:app", host=host, port=port, log_level="warning")
+
+
 @app.command(name="schedule")
 def schedule_cmd(
     job_file: Path = typer.Argument(..., help=_JOB_FILE_HELP, exists=True),
