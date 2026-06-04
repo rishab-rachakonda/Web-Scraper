@@ -12,7 +12,12 @@ A full-featured, async Python web scraper with a beautiful terminal UI — built
 - **Rule-based extraction** — CSS selectors, XPath, JMESPath, regex, transforms, auto JSON-LD parsing — no AI required
 - **Reusable output schemas** — declare your desired output shape once, reuse across jobs
 - **Auto-pagination** — follows "Next" links and infinite scroll with zero config
-- **Rate limiting & retries** — token-bucket + adaptive limiting (speeds up on success, backs off on 429)
+- **Rate limiting & retries** — per-domain token-bucket + adaptive limiting (speeds up on success, backs off on 429)
+- **Politeness** — optional `robots.txt` compliance (allow/disallow + crawl-delay)
+- **Sitemap seeding** — discover and crawl every URL in a site's `sitemap.xml`
+- **Change detection & resume** — label records new/changed vs unchanged across runs; checkpoint a big crawl and resume where it stopped
+- **Page capture** — save a full-page screenshot or PDF of each page (browser mode)
+- **Structured logging** — greppable `key=value` run logs
 - **Beautiful TUI** — live Rich dashboard with stats, progress, and a result preview
 - **Flexible export** — CSV, Excel (.xlsx), JSON, JSONL, PDF, Markdown, HTML, SQLite + real-time webhook push, with an **interactive "how do you want it?" menu**
 - **Scheduling** — cron-style recurring jobs via APScheduler
@@ -194,6 +199,42 @@ Builds a cached SQLite **FTS5** index over all speeches — search by full text,
 
 ---
 
+## ⚙️ Crawl & output options
+
+Flags available on `run` (and most on `smart`):
+
+| Flag | Effect |
+|---|---|
+| `-f, --format csv,pdf,all` | Choose output format(s): csv, xlsx, json, jsonl, pdf, markdown, html |
+| `--ask` | Pick the format interactively after scraping |
+| `--polite` | Respect `robots.txt` (allow/disallow + crawl-delay) |
+| `--sitemap` | Seed URLs from the site's `sitemap.xml` |
+| `--changes` | Label records new/changed vs unchanged vs the last run |
+| `--only-changes` | Export only new/changed records |
+| `--resume` | Resume an interrupted crawl (skip URLs already done) |
+| `--capture png\|pdf` | Save a screenshot/PDF of every page (browser mode) |
+| `--no-browser` | Force HTTP mode (skip Playwright) |
+
+Use `python scraper.py detect <url>` to preview the auto-detected schema and get a ready-to-edit job YAML without scraping.
+
+---
+
+## 🧪 Development
+
+```bash
+pip install -e ".[dev]"     # editable install with dev extras
+pytest                       # run the test suite
+```
+
+Or run it fully containerised (Chromium baked in):
+
+```bash
+docker build -t greatest-scraper .
+docker run -v "$PWD/output:/app/output" greatest-scraper run example_jobs/aggressive.yaml
+```
+
+---
+
 ## 🗂️ Project structure
 
 ```
@@ -208,14 +249,20 @@ core/
   stealth.py          Browser anti-detection patches
   pagination.py       Auto next-page / infinite-scroll detection
   cookie_import.py    Import cookies from a local browser
-  extractor.py        Rule-based data extraction (CSS/XPath/JMESPath/regex)
+  extractor.py        Rule-based data extraction (CSS/XPath/JMESPath/regex) + type casting
+  autoschema.py       Auto-detect the repeating structure + field rules (no LLM)
   ai_extractor.py     Output-schema loader (rule-based, despite the name)
-  engine.py           Orchestrates clients, concurrency, links, pagination
-pipeline/exporters.py JSONL / CSV / SQLite / webhook export
+  robots.py           robots.txt compliance
+  sitemap.py          sitemap.xml discovery
+  state.py            Change detection + resume/checkpoint
+  logger.py           Structured per-run logging
+  engine.py           Orchestrates clients, concurrency, links, pagination, smart mode
+pipeline/exporters.py CSV / Excel / JSON / JSONL / PDF / Markdown / HTML / SQLite / webhook
 ui/dashboard.py       Live Rich TUI dashboard
 scheduler/runner.py   APScheduler cron runner
 example_jobs/         Ready-to-run job files
 schemas/              Reusable rule-based output schemas
+tests/                Pytest suite
 ```
 
 ---
