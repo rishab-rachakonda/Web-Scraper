@@ -87,6 +87,7 @@ class JobConfig(BaseModel):
 
     # ── crawling ──────────────────────────────────────────────────────────────
     concurrency: int = 5               # parallel requests / browser pages
+    respect_robots: bool = False       # obey robots.txt (allow/disallow + crawl-delay)
     follow_links: bool = False
     link_selector: str | None = None
     max_depth: int = 1

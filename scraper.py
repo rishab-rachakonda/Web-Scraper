@@ -184,7 +184,7 @@ async def _run_job(job, verbose: bool = False, ask_format: bool = False):
             from rich.panel import Panel
             console.print(Panel(
                 "\n".join(f"• {n}" for n in engine.smart_notes),
-                title="🧠 smart decisions", border_style="bright_magenta", expand=False))
+                title="🧠 decisions & notices", border_style="bright_magenta", expand=False))
         if ask_format and all_items:
             chosen = _choose_formats()
             # keep the live terminal preview, swap in the chosen file formats
@@ -211,6 +211,7 @@ def run(
     output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Override output directory"),
     fmt: Optional[str] = typer.Option(None, "--format", "-f", help="Override output format(s), e.g. csv,pdf,all"),
     ask: bool = typer.Option(False, "--ask", help="Choose output format(s) interactively after scraping"),
+    polite: bool = typer.Option(False, "--polite", help="Respect robots.txt (allow/disallow + crawl-delay)"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Force HTTP mode (skip Playwright)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error logs"),
 ):
@@ -220,6 +221,8 @@ def run(
         job.export.output_dir = output_dir
     if no_browser:
         job.mode = "http"
+    if polite:
+        job.respect_robots = True
     if fmt:
         chosen = _parse_format_choice(fmt)
         if not chosen:
@@ -291,6 +294,7 @@ def smart(
         help="Output format(s), comma-separated (csv,xlsx,json,jsonl,pdf,markdown,html,all). "
              "Omit to be asked interactively."),
     pages: int = typer.Option(1, "--pages", "-p", help="Max pages to auto-paginate"),
+    polite: bool = typer.Option(False, "--polite", help="Respect robots.txt"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """[bold bright_magenta]Let the scraper decide everything[/] — transport, browser-vs-HTTP,
@@ -312,6 +316,7 @@ def smart(
         urls=[url],
         mode="smart",                       # the project decides the rest
         item_selector=item,                 # None unless you override
+        respect_robots=polite,
         pagination=PaginationConfig(auto=True, max_pages=pages) if pages > 1 else None,
         export=ExportConfig(formats=formats, output_dir=output_dir or "output/smart"),
     )

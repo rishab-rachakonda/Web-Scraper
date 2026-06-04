@@ -42,7 +42,12 @@ class ScraperEngine:
         self._visited: set[str] = set()
         self._queue: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
         self._webhook_buf: list[ScrapedItem] = []
-        self.smart_notes: list[str] = []   # human-readable decisions made in smart mode
+        self.smart_notes: list[str] = []   # human-readable decisions / notices
+        self._robots = None
+        if job.respect_robots:
+            from .robots import RobotsChecker
+            self._robots = RobotsChecker(job.headers.get("User-Agent", "*"))
+        self._skipped_robots = 0
 
         if job.output_schema:
             self._extractor = DataExtractor(OutputSchema(job.output_schema).to_rules())
@@ -188,6 +193,8 @@ class ScraperEngine:
 
         # flush any remaining webhook batch
         await self._flush_webhook()
+        if self._skipped_robots:
+            self.smart_notes.append(f"skipped {self._skipped_robots} URL(s) disallowed by robots.txt")
         return items
 
     # ── HTTP processing ───────────────────────────────────────────────────────
@@ -227,7 +234,15 @@ class ScraperEngine:
             if isinstance(r, list):
                 await self._collect(r, items)
 
+    async def _robots_blocks(self, url: str) -> bool:
+        if self._robots and not await self._robots.allowed(url):
+            self._skipped_robots += 1
+            return True
+        return False
+
     async def _scrape_http(self, client, url: str, depth: int) -> list[ScrapedItem]:
+        if await self._robots_blocks(url):
+            return []
         try:
             resp = await client.get(url)
             self._stats.bytes_downloaded += len(resp.content)
@@ -279,6 +294,8 @@ class ScraperEngine:
                     await self._collect(r, items)
 
     async def _scrape_browser(self, browser, url: str, depth: int) -> list[ScrapedItem]:
+        if await self._robots_blocks(url):
+            return []
         try:
             content, status = await browser.get_page_content(url)
             self._stats.bytes_downloaded += len(content.encode())

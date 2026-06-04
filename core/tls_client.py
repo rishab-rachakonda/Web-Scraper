@@ -101,7 +101,10 @@ class TLSClient:
         self._limiters: dict[str, _TokenBucket] = defaultdict(
             lambda: _TokenBucket(job.rate_limit.requests_per_second, job.rate_limit.burst)
         )
-        self._adaptive = _AdaptiveLimiter(job.rate_limit.requests_per_second)
+        # Per-domain adaptive limiter so a 429 on one host doesn't throttle others.
+        self._adaptive: dict[str, _AdaptiveLimiter] = defaultdict(
+            lambda: _AdaptiveLimiter(job.rate_limit.requests_per_second)
+        )
         self._session: AsyncSession | None = None
 
     async def __aenter__(self):
@@ -143,9 +146,10 @@ class TLSClient:
         from urllib.parse import urlparse
         domain = urlparse(url).netloc
         await self._limiters[domain].acquire()
+        adaptive = self._adaptive[domain]
 
         if self._job.adaptive_rate:
-            await asyncio.sleep(self._adaptive.delay)
+            await asyncio.sleep(adaptive.delay)
         else:
             await asyncio.sleep(self._job.rate_limit.delay_between_requests)
 
@@ -157,19 +161,19 @@ class TLSClient:
                 resp = await self._session.get(url)
 
                 if resp.status_code == 429:
-                    self._adaptive.backoff()
+                    adaptive.backoff()
                     wait = retry.backoff_factor ** attempt
                     await asyncio.sleep(wait)
                     last_exc = RuntimeError(f"HTTP 429 (rate limited)")
                     continue
 
                 if resp.status_code in retry.retry_on_status:
-                    self._adaptive.record(False)
+                    adaptive.record(False)
                     await asyncio.sleep(retry.backoff_factor ** attempt)
                     last_exc = RuntimeError(f"HTTP {resp.status_code}")
                     continue
 
-                self._adaptive.record(resp.status_code < 400)
+                adaptive.record(resp.status_code < 400)
                 return resp
 
             except Exception as exc:
