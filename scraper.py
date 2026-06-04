@@ -42,6 +42,65 @@ console = Console(legacy_windows=False)
 
 _JOB_FILE_HELP = "Path to job YAML file"
 
+# (format-key, label, description) for the interactive download menu.
+_FORMAT_MENU = [
+    ("csv",         "CSV",      "spreadsheet — Excel / Google Sheets"),
+    ("xlsx",        "Excel",    ".xlsx workbook (styled, frozen header)"),
+    ("json_pretty", "JSON",     "structured, pretty-printed"),
+    ("jsonl",       "JSONL",    "one JSON object per line (streaming)"),
+    ("pdf",         "PDF",      "printable report"),
+    ("markdown",    "Markdown", ".md table"),
+    ("html",        "HTML",     "web-page table you can open in a browser"),
+]
+_FORMAT_ALIASES = {"json": "json_pretty", "excel": "xlsx", "md": "markdown"}
+
+
+def _parse_format_choice(raw: str) -> list[str]:
+    """Turn '1,3' / 'csv,pdf' / 'all' into a list of format keys."""
+    raw = raw.strip().lower()
+    if raw in ("all", "*"):
+        return [key for key, _, _ in _FORMAT_MENU]
+    keys: list[str] = []
+    valid = {key for key, _, _ in _FORMAT_MENU}
+    for token in raw.replace(" ", ",").split(","):
+        if not token:
+            continue
+        if token.isdigit() and 1 <= int(token) <= len(_FORMAT_MENU):
+            key = _FORMAT_MENU[int(token) - 1][0]
+        else:
+            key = _FORMAT_ALIASES.get(token, token)
+        if key in valid and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _choose_formats() -> list[str]:
+    """Show the download-format menu and return the chosen format keys.
+    Falls back to CSV+JSON when input isn't interactive."""
+    if not sys.stdin.isatty():
+        return ["csv", "json_pretty"]
+    from rich.prompt import Prompt
+
+    table = Table(title="📦  How do you want your results?", box=box.ROUNDED,
+                  title_style="bold bright_magenta", header_style="bold cyan")
+    table.add_column("#", justify="right", style="bright_yellow")
+    table.add_column("Format")
+    table.add_column("Description", style="dim")
+    for i, (_, label, desc) in enumerate(_FORMAT_MENU, 1):
+        table.add_row(str(i), label, desc)
+    table.add_row("*", "All of the above", "every format")
+    console.print()
+    console.print(table)
+
+    while True:
+        raw = Prompt.ask(
+            "[bright_cyan]Choose format(s)[/] — numbers or names, comma-separated, or 'all'",
+            default="1")
+        chosen = _parse_format_choice(raw)
+        if chosen:
+            return chosen
+        console.print("[yellow]Didn't recognise that — try e.g. 1,3 or csv,pdf or all.[/]")
+
 
 def _load_job(path: Path):
     from core.models import JobConfig
@@ -96,7 +155,7 @@ def _print_preview(items):
     console.print(t)
 
 
-async def _run_job(job, verbose: bool = False):
+async def _run_job(job, verbose: bool = False, ask_format: bool = False):
     from core.engine import ScraperEngine
     from core.models import ScraperStats, ScrapedItem
     from pipeline.exporters import Exporter
@@ -126,6 +185,10 @@ async def _run_job(job, verbose: bool = False):
             console.print(Panel(
                 "\n".join(f"• {n}" for n in engine.smart_notes),
                 title="🧠 smart decisions", border_style="bright_magenta", expand=False))
+        if ask_format and all_items:
+            chosen = _choose_formats()
+            # keep the live terminal preview, swap in the chosen file formats
+            job.export.formats = chosen + (["terminal"] if "terminal" in job.export.formats else [])
         paths = await Exporter(job.export, job.name).export_all(all_items)
         dash.print_summary(paths)
         if "terminal" in job.export.formats:
@@ -207,32 +270,36 @@ def quick(
 def smart(
     url: str = typer.Argument(..., help="URL to scrape"),
     item: Optional[str] = typer.Option(None, "--item", help="Override the auto-detected item_selector"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (.json/.csv) or dir"),
+    output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    fmt: Optional[str] = typer.Option(None, "--format", "-f",
+        help="Output format(s), comma-separated (csv,xlsx,json,jsonl,pdf,markdown,html,all). "
+             "Omit to be asked interactively."),
     pages: int = typer.Option(1, "--pages", "-p", help="Max pages to auto-paginate"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """[bold bright_magenta]Let the scraper decide everything[/] — transport, browser-vs-HTTP,
-    and the extraction schema. Give it just a URL; override only what you want."""
+    and the extraction schema. Give it just a URL; pick your download format when prompted."""
     from core.models import ExportConfig, JobConfig, PaginationConfig
 
-    out_dir, stem, formats = "output/smart", None, ["json", "csv", "terminal"]
-    if output:
-        p = Path(output)
-        if p.suffix:
-            stem, out_dir = p.stem, str(p.parent) or "output/smart"
-            formats = ["json", "terminal"] if p.suffix.lower().lstrip(".") in ("json", "jsonl") else ["csv", "terminal"]
-        else:
-            out_dir = str(p)
+    ask_format = fmt is None
+    if ask_format:
+        formats = ["terminal"]              # placeholder; chosen after scraping
+    else:
+        chosen = _parse_format_choice(fmt)
+        if not chosen:
+            console.print(f"[red]Unknown format(s):[/] {fmt}")
+            raise typer.Exit(1)
+        formats = chosen + ["terminal"]
 
     job = JobConfig(
-        name=stem or "smart",
+        name="smart",
         urls=[url],
         mode="smart",                       # the project decides the rest
         item_selector=item,                 # None unless you override
         pagination=PaginationConfig(auto=True, max_pages=pages) if pages > 1 else None,
-        export=ExportConfig(formats=formats, output_dir=out_dir, filename=stem),
+        export=ExportConfig(formats=formats, output_dir=output_dir or "output/smart"),
     )
-    asyncio.run(_run_job(job, verbose))
+    asyncio.run(_run_job(job, verbose, ask_format=ask_format))
 
 
 @app.command(name="schedule")

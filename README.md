@@ -14,7 +14,7 @@ A full-featured, async Python web scraper with a beautiful terminal UI — built
 - **Auto-pagination** — follows "Next" links and infinite scroll with zero config
 - **Rate limiting & retries** — token-bucket + adaptive limiting (speeds up on success, backs off on 429)
 - **Beautiful TUI** — live Rich dashboard with stats, progress, and a result preview
-- **Flexible export** — JSON / JSONL / CSV / SQLite + real-time webhook push
+- **Flexible export** — CSV, Excel (.xlsx), JSON, JSONL, PDF, Markdown, HTML, SQLite + real-time webhook push, with an **interactive "how do you want it?" menu**
 - **Scheduling** — cron-style recurring jobs via APScheduler
 
 ---
@@ -64,6 +64,30 @@ On run it probes the page and makes three decisions, **printing each one** in a 
 3. **Schema** — finds the dominant **repeating structure** and proposes an `item_selector` + field rules, so you get clean per-item records with **zero hand-written selectors**.
 
 It only fills in what you leave blank — set `mode`, `tls_impersonate`, `item_selector`, or `rules` yourself and smart mode respects them. Use it in a job file with `mode: smart` (see [`example_jobs/smart.yaml`](example_jobs/smart.yaml)).
+
+### Pick your download format
+
+After a `smart` scrape, you're asked how you want the data — or pass `--format` to skip the prompt:
+
+```
+📦  How do you want your results?
+  1  CSV       spreadsheet — Excel / Google Sheets
+  2  Excel     .xlsx workbook (styled, frozen header)
+  3  JSON      structured, pretty-printed
+  4  JSONL     one JSON object per line (streaming)
+  5  PDF       printable report
+  6  Markdown  .md table
+  7  HTML      web-page table you can open in a browser
+  *  All of the above
+```
+
+```bash
+python scraper.py smart https://books.toscrape.com              # asks interactively
+python scraper.py smart https://books.toscrape.com -f csv,pdf   # straight to files
+python scraper.py smart https://books.toscrape.com -f all       # every format
+```
+
+The same formats work in any job file's `export.formats` list (e.g. `[csv, xlsx, pdf, html]`).
 
 ---
 

@@ -32,8 +32,14 @@ class ExtractorRule(BaseModel):
     transform: Literal["strip", "lower", "upper", "int", "float", "url"] | None = None
 
 
+_FORMAT = Literal[
+    "json", "jsonl", "json_pretty", "csv", "xlsx", "excel",
+    "pdf", "markdown", "md", "html", "sqlite", "terminal",
+]
+
+
 class ExportConfig(BaseModel):
-    formats: list[Literal["json", "csv", "sqlite", "terminal"]] = ["json", "terminal"]
+    formats: list[_FORMAT] = ["json", "terminal"]
     output_dir: str = "output"
     filename: str | None = None
     db_path: str = "output/scraped.db"
