@@ -1,0 +1,30 @@
+# scrapethissite.com — 250 country cards (name, capital, population, area).
+# A clean, simple static-HTML target. Demonstrates multi-field rule extraction.
+
+name: countries
+description: All countries with capital, population and area
+
+urls:
+  - https://www.scrapethissite.com/pages/simple/
+
+mode: http
+
+rules:
+  - name: name
+    selector: .country-name
+    transform: strip
+    multiple: true
+  - name: capital
+    selector: .country-capital
+    multiple: true
+  - name: population
+    selector: .country-population
+    transform: int
+    multiple: true
+  - name: area
+    selector: .country-area
+    multiple: true
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/countries
