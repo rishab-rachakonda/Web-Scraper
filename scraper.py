@@ -213,6 +213,9 @@ def run(
     ask: bool = typer.Option(False, "--ask", help="Choose output format(s) interactively after scraping"),
     polite: bool = typer.Option(False, "--polite", help="Respect robots.txt (allow/disallow + crawl-delay)"),
     sitemap: bool = typer.Option(False, "--sitemap", help="Seed URLs from the site's sitemap.xml"),
+    changes: bool = typer.Option(False, "--changes", help="Label items new/changed/unchanged vs last run"),
+    only_changes: bool = typer.Option(False, "--only-changes", help="Export only new/changed items"),
+    resume: bool = typer.Option(False, "--resume", help="Resume an interrupted run (skip URLs already done)"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Force HTTP mode (skip Playwright)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error logs"),
 ):
@@ -226,6 +229,12 @@ def run(
         job.respect_robots = True
     if sitemap:
         job.from_sitemap = True
+    if changes:
+        job.track_changes = True
+    if only_changes:
+        job.only_changes = True
+    if resume:
+        job.resume = True
     if fmt:
         chosen = _parse_format_choice(fmt)
         if not chosen:

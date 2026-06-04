@@ -49,6 +49,11 @@ class ScraperEngine:
             self._robots = RobotsChecker(job.headers.get("User-Agent", "*"))
         self._skipped_robots = 0
 
+        self._store = None
+        if job.track_changes or job.only_changes or job.resume:
+            from .state import RunStore
+            self._store = RunStore(job.name, job.export.output_dir)
+
         if job.output_schema:
             self._extractor = DataExtractor(OutputSchema(job.output_schema).to_rules())
         else:
@@ -160,6 +165,16 @@ class ScraperEngine:
         else:
             self.smart_notes.append("no repeating structure found → whole-page extraction")
 
+    def _preload_resume(self, items: list[ScrapedItem]):
+        if not (self._store and self._job.resume):
+            return
+        for prev in self._store.load_resume_items():
+            if prev.url not in self._visited:
+                self._visited.add(prev.url)
+                items.append(prev)
+        if items:
+            self.smart_notes.append(f"resume: restored {len(items)} item(s) from a prior run")
+
     async def _maybe_seed_from_sitemap(self):
         if not self._job.from_sitemap or not self._job.urls:
             return
@@ -191,6 +206,7 @@ class ScraperEngine:
 
         use_browser = await self._detect_mode()
         items: list[ScrapedItem] = []
+        self._preload_resume(items)
 
         if use_browser:
             from .browser import BrowserEngine
@@ -208,12 +224,29 @@ class ScraperEngine:
         await self._flush_webhook()
         if self._skipped_robots:
             self.smart_notes.append(f"skipped {self._skipped_robots} URL(s) disallowed by robots.txt")
+        if self._store:
+            if self._job.track_changes or self._job.only_changes:
+                self.smart_notes.append(
+                    f"changes vs last run: {self._store.new} new/changed, "
+                    f"{self._store.unchanged} unchanged")
+            self._store.save(finished=True)
         return items
 
     # ── HTTP processing ───────────────────────────────────────────────────────
 
     async def _collect(self, batch: list[ScrapedItem], items: list[ScrapedItem]):
         for item in batch:
+            if self._store and not item.error:
+                if self._job.track_changes or self._job.only_changes:
+                    change = self._store.classify(item)
+                    if self._job.only_changes and change == "unchanged":
+                        if self._job.resume:
+                            self._store.checkpoint(item)
+                        continue
+                    if self._job.track_changes:
+                        item.data["_change"] = change
+                if self._job.resume:
+                    self._store.checkpoint(item)
             items.append(item)
             await self._notify(item)
 

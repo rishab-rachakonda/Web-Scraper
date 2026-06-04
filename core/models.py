@@ -90,6 +90,9 @@ class JobConfig(BaseModel):
     respect_robots: bool = False       # obey robots.txt (allow/disallow + crawl-delay)
     from_sitemap: bool = False         # seed URLs from the site's sitemap.xml
     sitemap_limit: int = 1000          # max URLs to pull from the sitemap
+    track_changes: bool = False        # label items new/changed/unchanged vs last run
+    only_changes: bool = False         # keep only new/changed items in the output
+    resume: bool = False               # checkpoint progress; skip URLs already done
     follow_links: bool = False
     link_selector: str | None = None
     max_depth: int = 1
