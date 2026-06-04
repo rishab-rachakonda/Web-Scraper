@@ -209,6 +209,8 @@ async def _run_job(job, verbose: bool = False, ask_format: bool = False):
 def run(
     job_file: Path = typer.Argument(..., help=_JOB_FILE_HELP, exists=True),
     output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Override output directory"),
+    fmt: Optional[str] = typer.Option(None, "--format", "-f", help="Override output format(s), e.g. csv,pdf,all"),
+    ask: bool = typer.Option(False, "--ask", help="Choose output format(s) interactively after scraping"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Force HTTP mode (skip Playwright)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error logs"),
 ):
@@ -218,7 +220,13 @@ def run(
         job.export.output_dir = output_dir
     if no_browser:
         job.mode = "http"
-    asyncio.run(_run_job(job, verbose))
+    if fmt:
+        chosen = _parse_format_choice(fmt)
+        if not chosen:
+            console.print(f"[red]Unknown format(s):[/] {fmt}")
+            raise typer.Exit(1)
+        job.export.formats = chosen + ["terminal"]
+    asyncio.run(_run_job(job, verbose, ask_format=ask))
 
 
 @app.command()
@@ -230,6 +238,8 @@ def quick(
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow same-domain links"),
     depth: int = typer.Option(1, "--depth", "-d", help="Max crawl depth when following links"),
     use_browser: bool = typer.Option(False, "--browser", "-b", help="Use Playwright browser engine"),
+    fmt: Optional[str] = typer.Option(None, "--format", help="Output format(s), e.g. csv,pdf,all"),
+    ask: bool = typer.Option(False, "--ask", help="Choose output format(s) interactively after scraping"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """[bold bright_cyan]Instantly scrape a URL — no config file needed.[/]"""
@@ -253,6 +263,12 @@ def quick(
         out_dir = str(p.parent)
         ext = p.suffix.lower().lstrip(".")
         formats = ["json", "terminal"] if ext in ("json", "jsonl") else ["csv", "terminal"]
+    if fmt:
+        chosen = _parse_format_choice(fmt)
+        if not chosen:
+            console.print(f"[red]Unknown format(s):[/] {fmt}")
+            raise typer.Exit(1)
+        formats = chosen + ["terminal"]
 
     job = JobConfig(
         name=stem or "quick",
@@ -263,7 +279,7 @@ def quick(
         max_depth=depth,
         export=ExportConfig(formats=formats, output_dir=out_dir, filename=stem),
     )
-    asyncio.run(_run_job(job, verbose))
+    asyncio.run(_run_job(job, verbose, ask_format=ask))
 
 
 @app.command()
@@ -300,6 +316,69 @@ def smart(
         export=ExportConfig(formats=formats, output_dir=output_dir or "output/smart"),
     )
     asyncio.run(_run_job(job, verbose, ask_format=ask_format))
+
+
+def _slug_from_url(url: str) -> str:
+    from urllib.parse import urlparse
+    host = urlparse(url).netloc.replace("www.", "").split(".")[0]
+    return "".join(ch if ch.isalnum() else "_" for ch in host).strip("_") or "scrape"
+
+
+@app.command()
+def detect(
+    url: str = typer.Argument(..., help="URL to analyse"),
+    save: Optional[Path] = typer.Option(None, "--save", "-s", help="Write the generated job YAML to this file"),
+):
+    """[bold bright_cyan]Preview the auto-detected schema[/] for a URL and print a ready-to-run
+    job YAML — without scraping. Edit it, then `python scraper.py run` it."""
+    import httpx
+    from core.autoschema import detect_schema
+
+    console.print(f"[cyan]Probing[/] {url} ...")
+    try:
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
+        html = httpx.get(url, headers={"User-Agent": ua}, timeout=30, follow_redirects=True).text
+    except Exception as exc:
+        console.print(f"[red]Fetch failed:[/] {exc}")
+        raise typer.Exit(1)
+
+    selector, rules = detect_schema(html)
+    if not selector:
+        console.print("[yellow]No repeating structure detected.[/] "
+                      "The page may be JS-rendered (try `smart`) or need manual selectors.")
+        raise typer.Exit(0)
+
+    table = Table(title=f"🔎  Detected schema  ·  item_selector = [bold]{selector}[/]",
+                  box=box.ROUNDED, header_style="bold cyan")
+    table.add_column("Field"); table.add_column("Selector", style="dim"); table.add_column("Extracts")
+    for r in rules:
+        kind = f"attribute: {r.attribute}" if r.attribute else (r.transform or "text")
+        table.add_row(r.name, r.selector, kind)
+    console.print(table)
+
+    name = _slug_from_url(url)
+    job_dict = {
+        "name": name,
+        "urls": [url],
+        "mode": "http",
+        "item_selector": selector,
+        "rules": [
+            {"name": r.name, "selector": r.selector,
+             **({"attribute": r.attribute} if r.attribute else {}),
+             **({"transform": r.transform} if r.transform else {})}
+            for r in rules
+        ],
+        "export": {"formats": ["csv", "json", "terminal"], "output_dir": f"output/{name}"},
+    }
+    yaml_str = yaml.safe_dump(job_dict, sort_keys=False, allow_unicode=True)
+    console.print(Panel(yaml_str.rstrip(), title="📝 generated job YAML",
+                        border_style="green", expand=False))
+
+    if save:
+        save.write_text(yaml_str, encoding="utf-8")
+        console.print(f"[green]Saved[/] → {save}    run it with: python scraper.py run {save}")
+    else:
+        console.print("[dim]Tip: re-run with --save example_jobs/%s.yaml to keep it.[/]" % name)
 
 
 @app.command(name="schedule")
