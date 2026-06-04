@@ -29,7 +29,7 @@ class ExtractorRule(BaseModel):
     regex: str | None = None
     attribute: str | None = None
     multiple: bool = False
-    transform: Literal["strip", "lower", "upper", "int", "float", "url"] | None = None
+    transform: Literal["strip", "lower", "upper", "int", "float", "url", "auto"] | None = None
 
 
 _FORMAT = Literal[

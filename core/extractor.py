@@ -2,12 +2,39 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 from .models import ExtractorRule
+
+_CURRENCY = "$£€¥₹₽₩"
+_DATE_FORMATS = (
+    "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y",
+    "%b %d, %Y", "%B %d, %Y", "%Y/%m/%d",
+)
+
+
+def _auto_cast(value: str):
+    """Best-effort type inference: numbers/currency -> int|float, dates -> ISO,
+    otherwise the cleaned string."""
+    s = " ".join(value.split())
+    if not s:
+        return s
+    core = s.strip(_CURRENCY + " %").replace(",", "")
+    if re.fullmatch(r"-?\d+", core):
+        return int(core)
+    if re.fullmatch(r"-?\d*\.\d+", core):
+        return float(core)
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return s
+
 
 _TRANSFORMS = {
     "strip": str.strip,
@@ -16,6 +43,7 @@ _TRANSFORMS = {
     "int": lambda x: int(re.sub(r"[^\d\-]", "", x) or "0"),
     "float": lambda x: float(re.sub(r"[^\d.\-]", "", x) or "0"),
     "url": str.strip,
+    "auto": _auto_cast,
 }
 
 

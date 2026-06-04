@@ -133,7 +133,7 @@ class ScraperEngine:
         if self._job.rules or self._job.output_schema or not html:
             return
         if self._job.item_selector:
-            rules = detect_fields(html, self._job.item_selector, url)
+            rules = detect_fields(html, self._job.item_selector)
             if rules:
                 self._job.rules = rules
                 self._extractor = DataExtractor(rules)
@@ -144,7 +144,7 @@ class ScraperEngine:
                 self.smart_notes.append(
                     f"item_selector '{self._job.item_selector}' matched no fields")
             return
-        selector, rules = detect_schema(html, url)
+        selector, rules = detect_schema(html)
         if selector and rules:
             self._job.item_selector = selector
             self._job.rules = rules

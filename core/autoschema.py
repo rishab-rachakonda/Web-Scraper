@@ -46,63 +46,82 @@ def _clean_name(raw: str, used: set[str]) -> str:
     return name
 
 
-def _detect_fields(sample: Tag, base_url: str) -> list[ExtractorRule]:
-    rules: list[ExtractorRule] = []
-    used_names: set[str] = set()
-    seen_selectors: set[str] = set()
-
+def _candidates(sample: Tag) -> list[tuple[Tag, str, str, bool]]:
+    """Elements worth turning into fields: (el, selector, name_src, has_class)."""
+    out: list[tuple[Tag, str, str, bool]] = []
     for el in sample.find_all(True):
         if el is sample:
             continue
         classes = [c for c in (el.get("class") or []) if c not in _NOISE_CLASSES]
-        text = el.get_text(" ", strip=True)
-
-        # Decide a selector + field name for this element.
         if classes:
-            selector = "." + classes[0]
-            name_src = classes[0]
+            out.append((el, "." + classes[0], classes[0], True))
         elif el.name in _FIELDISH_TAGS:
-            selector = el.name
-            name_src = el.name
-        else:
+            out.append((el, el.name, el.name, False))
+    return out
+
+
+def _is_meaningful(el: Tag) -> bool:
+    """A candidate that actually carries data — real text, a link, or an image.
+    Decorative empties (icon <i>, spacer <span>) don't count."""
+    if el.name == "a" and el.get("href"):
+        return True
+    if el.name == "img" and el.get("src"):
+        return True
+    return bool(el.get_text(strip=True))
+
+
+def _detect_fields(sample: Tag) -> list[ExtractorRule]:
+    candidates = _candidates(sample)
+    meaningful_ids = {id(el) for el, *_ in candidates if _is_meaningful(el)}
+
+    def is_wrapper(el: Tag) -> bool:
+        # A field whose descendants include a *meaningful* candidate is a
+        # container (e.g. country_info), not a leaf — drop it. Decorative
+        # children (a flag icon with no text) don't make it a wrapper.
+        return any(id(d) in meaningful_ids for d in el.find_all(True))
+
+    rules: list[ExtractorRule] = []
+    used_names: set[str] = set()
+    seen_selectors: set[str] = set()
+    seen_values: set[str] = set()
+
+    for el, selector, name_src, has_class in candidates:
+        if selector in seen_selectors or len(rules) >= 10:
             continue
-
-        if selector in seen_selectors:
-            continue
-
-        # Links and images contribute a URL field; everything else needs text.
-        if el.name == "a" and el.get("href"):
+        rule = _rule_for(el, selector, name_src, has_class, is_wrapper, used_names, seen_values)
+        if rule is not None:
             seen_selectors.add(selector)
-            rules.append(ExtractorRule(
-                name=_clean_name(name_src if classes else "link", used_names),
-                selector=selector, attribute="href"))
-        elif el.name == "img" and el.get("src"):
-            seen_selectors.add(selector)
-            rules.append(ExtractorRule(
-                name=_clean_name(name_src if classes else "image", used_names),
-                selector=selector, attribute="src"))
-        elif text:
-            seen_selectors.add(selector)
-            rules.append(ExtractorRule(
-                name=_clean_name(name_src, used_names),
-                selector=selector, transform="strip"))
+            rules.append(rule)
 
-        if len(rules) >= 10:
-            break
-
-    # If nothing distinctive was found, fall back to the item's own text.
-    if not rules:
+    if not rules:                       # nothing distinctive → the item's own text
         rules.append(ExtractorRule(name="text", selector=":scope", transform="strip"))
     return rules
 
 
-def detect_fields(html: str, item_selector: str, base_url: str = "") -> list[ExtractorRule]:
+def _rule_for(el, selector, name_src, has_class, is_wrapper, used_names, seen_values):
+    if el.name == "a" and el.get("href"):
+        return ExtractorRule(name=_clean_name(name_src if has_class else "link", used_names),
+                             selector=selector, attribute="href")
+    if el.name == "img" and el.get("src"):
+        return ExtractorRule(name=_clean_name(name_src if has_class else "image", used_names),
+                             selector=selector, attribute="src")
+    if is_wrapper(el):                  # drop containers like country_info
+        return None
+    text = el.get_text(" ", strip=True)
+    if not text or text in seen_values:  # drop empties and duplicate values
+        return None
+    seen_values.add(text)
+    # 'auto' casts numbers/currency/dates; falls back to clean text.
+    return ExtractorRule(name=_clean_name(name_src, used_names), selector=selector, transform="auto")
+
+
+def detect_fields(html: str, item_selector: str) -> list[ExtractorRule]:
     """Detect field rules inside a caller-supplied container selector."""
     container = BeautifulSoup(html, "lxml").select_one(item_selector)
-    return _detect_fields(container, base_url) if container else []
+    return _detect_fields(container) if container else []
 
 
-def detect_schema(html: str, base_url: str = "") -> tuple[str | None, list[ExtractorRule]]:
+def detect_schema(html: str) -> tuple[str | None, list[ExtractorRule]]:
     """Return (item_selector, rules). item_selector is None if no repeating
     structure was confidently found.
 
@@ -129,7 +148,7 @@ def detect_schema(html: str, base_url: str = "") -> tuple[str | None, list[Extra
             continue
         if text_total[sig] / count < 15:        # skip decorative/empty repeats
             continue
-        rules = _detect_fields(sample_of[sig], base_url)
+        rules = _detect_fields(sample_of[sig])
         if not rules:
             continue
         # Favour many repeats AND many distinct fields → the true record level.
