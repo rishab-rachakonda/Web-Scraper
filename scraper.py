@@ -216,6 +216,7 @@ def run(
     changes: bool = typer.Option(False, "--changes", help="Label items new/changed/unchanged vs last run"),
     only_changes: bool = typer.Option(False, "--only-changes", help="Export only new/changed items"),
     resume: bool = typer.Option(False, "--resume", help="Resume an interrupted run (skip URLs already done)"),
+    capture: Optional[str] = typer.Option(None, "--capture", help="Save each page as png or pdf (forces browser mode)"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Force HTTP mode (skip Playwright)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error logs"),
 ):
@@ -225,6 +226,12 @@ def run(
         job.export.output_dir = output_dir
     if no_browser:
         job.mode = "http"
+    if capture:
+        if capture not in ("png", "pdf"):
+            console.print("[red]--capture must be 'png' or 'pdf'[/]")
+            raise typer.Exit(1)
+        job.capture = capture
+        job.mode = "browser"
     if polite:
         job.respect_robots = True
     if sitemap:

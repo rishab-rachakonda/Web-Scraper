@@ -82,6 +82,7 @@ class JobConfig(BaseModel):
 
     # ── anti-detection ────────────────────────────────────────────────────────
     stealth: bool = False              # apply JS stealth patches in browser mode
+    capture: Literal["png", "pdf"] | None = None  # save a screenshot/PDF of each page (browser mode)
     tls_impersonate: str | None = None # e.g. "chrome124" — uses curl_cffi TLS client
     cookies_from: str | None = None   # "chrome" | "firefox" | "edge" — import browser cookies
 

@@ -4,7 +4,11 @@ Playwright Chromium engine with stealth, parallel pages, and proxy support.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import re
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from .models import JobConfig
 
@@ -77,10 +81,12 @@ class BrowserEngine:
             }
 
         ctx = await self._browser.new_context(**ctx_args)
-        await ctx.route(
-            "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,otf,mp4,webm}",
-            lambda r: r.abort(),
-        )
+        # Block heavy assets for speed — but keep images when capturing visuals.
+        if not self._job.capture:
+            await ctx.route(
+                "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,otf,mp4,webm}",
+                lambda r: r.abort(),
+            )
         return ctx
 
     async def __aexit__(self, *_):
@@ -122,9 +128,32 @@ class BrowserEngine:
             else:
                 content = await page.content()
 
+            if self._job.capture:
+                await self._capture(page, url)
+
             return content, status
         finally:
             await page.close()
+
+    def _capture_path(self, url: str, ext: str) -> Path:
+        p = urlparse(url)
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", (p.netloc + p.path)).strip("-")[:60] or "page"
+        digest = hashlib.sha256(url.encode()).hexdigest()[:8]
+        out_dir = Path(self._job.export.output_dir) / "captures"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir / f"{slug}-{digest}.{ext}"
+
+    async def _capture(self, page: "Page", url: str):
+        try:
+            if self._job.capture == "pdf":
+                await page.emulate_media(media="screen")
+                await page.pdf(path=str(self._capture_path(url, "pdf")),
+                               print_background=True)
+            else:
+                await page.screenshot(path=str(self._capture_path(url, "png")),
+                                      full_page=True)
+        except Exception:
+            pass   # capture is best-effort; never fail the scrape over it
 
     async def login(self, login_url: str, username: str, password: str) -> dict[str, str]:
         from .stealth import apply_stealth
