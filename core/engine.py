@@ -16,8 +16,16 @@ from typing import Callable
 import httpx
 
 from .ai_extractor import OutputSchema
+from .autoschema import detect_fields, detect_schema
 from .extractor import DataExtractor
 from .models import JobConfig, ScrapedItem, ScraperStats
+
+_SMART_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+_BLOCK_MARKERS = ("just a moment", "cf-browser-verification", "attention required",
+                  "checking your browser", "access denied")
 
 
 class ScraperEngine:
@@ -34,6 +42,7 @@ class ScraperEngine:
         self._visited: set[str] = set()
         self._queue: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
         self._webhook_buf: list[ScrapedItem] = []
+        self.smart_notes: list[str] = []   # human-readable decisions made in smart mode
 
         if job.output_schema:
             self._extractor = DataExtractor(OutputSchema(job.output_schema).to_rules())
@@ -96,8 +105,68 @@ class ScraperEngine:
 
     # ── main entry point ──────────────────────────────────────────────────────
 
+    async def _smart_setup(self):
+        """Smart mode: probe the first URL and decide transport + schema, but
+        never override anything the user set explicitly."""
+        if self._job.mode != "smart" or not self._job.urls:
+            return
+        url = self._job.urls[0]
+        html, blocked = "", False
+        try:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True,
+                                         headers={"User-Agent": _SMART_UA}) as c:
+                r = await c.get(url)
+                html = r.text
+                low = html.lower()
+                blocked = r.status_code in (403, 429) or any(m in low for m in _BLOCK_MARKERS)
+        except Exception:
+            blocked = True
+
+        # 1. Transport: escalate to TLS impersonation if the site looks protected.
+        if blocked and not self._job.tls_impersonate:
+            self._job.tls_impersonate = "chrome124"
+            self.smart_notes.append("site looks protected → TLS impersonation (chrome124)")
+            html = await self._fetch_with_tls(url) or html
+
+        # 2. Schema: auto-detect when the user supplied no extraction rules.
+        #    Respect an explicit item_selector — only detect the fields inside it.
+        if self._job.rules or self._job.output_schema or not html:
+            return
+        if self._job.item_selector:
+            rules = detect_fields(html, self._job.item_selector, url)
+            if rules:
+                self._job.rules = rules
+                self._extractor = DataExtractor(rules)
+                self.smart_notes.append(
+                    f"using your item_selector '{self._job.item_selector}'; "
+                    f"auto-detected {len(rules)} fields: " + ", ".join(r.name for r in rules))
+            else:
+                self.smart_notes.append(
+                    f"item_selector '{self._job.item_selector}' matched no fields")
+            return
+        selector, rules = detect_schema(html, url)
+        if selector and rules:
+            self._job.item_selector = selector
+            self._job.rules = rules
+            self._extractor = DataExtractor(rules)
+            self.smart_notes.append(
+                f"auto-detected item_selector '{selector}' with {len(rules)} fields: "
+                + ", ".join(r.name for r in rules))
+        else:
+            self.smart_notes.append("no repeating structure found → whole-page extraction")
+
+    async def _fetch_with_tls(self, url: str) -> str:
+        try:
+            from .tls_client import TLSClient
+            async with TLSClient(self._job) as c:
+                r = await c.get(url)
+                return r.text
+        except Exception:
+            return ""
+
     async def run(self) -> list[ScrapedItem]:
         self._merge_cookies()
+        await self._smart_setup()
 
         for url in self._job.urls:
             await self._queue.put((url, 0))

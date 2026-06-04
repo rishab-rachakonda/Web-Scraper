@@ -1,0 +1,21 @@
+# Smart mode — the scraper decides everything.
+#
+# Give it just a URL. On run it probes the page and automatically:
+#   • picks the transport (plain HTTP, or escalates to TLS impersonation if blocked)
+#   • chooses HTTP vs a real browser depending on whether the page is JS-rendered
+#   • auto-detects the repeating structure and field selectors (no rules needed)
+#
+# Anything you DO set below (item_selector, rules, tls_impersonate, mode) is
+# respected — smart mode only fills in what you leave blank.
+
+name: smart
+description: Zero-config smart scrape
+
+urls:
+  - https://books.toscrape.com
+
+mode: smart
+
+export:
+  formats: [json, csv, terminal]
+  output_dir: output/smart

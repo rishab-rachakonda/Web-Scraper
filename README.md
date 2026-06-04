@@ -6,6 +6,7 @@ A full-featured, async Python web scraper with a beautiful terminal UI — built
 
 ## ✨ Features
 
+- **🧠 Smart mode** — give it just a URL; it probes the page and auto-picks the transport (HTTP / TLS-impersonation / browser) **and** the extraction schema, only deferring to you where you've set something explicitly
 - **Any site type** — static pages, JavaScript SPAs (Playwright), JSON APIs, auth-required pages
 - **Anti-detection** — TLS fingerprint impersonation (curl_cffi), stealth browser patches, browser-cookie import, proxy rotation
 - **Rule-based extraction** — CSS selectors, XPath, JMESPath, regex, transforms, auto JSON-LD parsing — no AI required
@@ -26,7 +27,10 @@ playwright install chromium        # only needed for browser/stealth mode
 ```
 
 ```bash
-# Instantly scrape one URL — no config needed
+# 🧠 Smart mode — just a URL; it figures out transport + schema itself
+python scraper.py smart https://books.toscrape.com
+
+# Instantly scrape one URL with a known selector — no config needed
 python scraper.py quick https://quotes.toscrape.com --select "span.text"
 
 # Run a full job from a YAML file
@@ -40,6 +44,26 @@ python scraper.py info
 ```
 
 Output is written to `output/<job_name>/` as `.jsonl` and `.csv`, with a live dashboard in the terminal.
+
+---
+
+## 🧠 Smart mode
+
+Don't know the selectors, or whether a site needs a browser? Hand it a URL and let the project decide:
+
+```bash
+python scraper.py smart https://books.toscrape.com
+python scraper.py smart https://example.com --item ".product"   # override just the container
+python scraper.py smart https://example.com -p 10               # auto-paginate up to 10 pages
+```
+
+On run it probes the page and makes three decisions, **printing each one** in a "smart decisions" panel:
+
+1. **Transport** — starts with plain HTTP; if the site answers `403/429` or shows a bot-challenge, it escalates to **TLS impersonation** (`chrome124`) automatically.
+2. **Engine** — detects JS-rendered shells (Next/Nuxt/React/etc.) and switches to a real **browser** when needed.
+3. **Schema** — finds the dominant **repeating structure** and proposes an `item_selector` + field rules, so you get clean per-item records with **zero hand-written selectors**.
+
+It only fills in what you leave blank — set `mode`, `tls_impersonate`, `item_selector`, or `rules` yourself and smart mode respects them. Use it in a job file with `mode: smart` (see [`example_jobs/smart.yaml`](example_jobs/smart.yaml)).
 
 ---
 

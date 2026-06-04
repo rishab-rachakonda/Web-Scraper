@@ -121,6 +121,11 @@ async def _run_job(job, verbose: bool = False):
     try:
         all_items = await engine.run()
         dash.stop()
+        if engine.smart_notes:
+            from rich.panel import Panel
+            console.print(Panel(
+                "\n".join(f"• {n}" for n in engine.smart_notes),
+                title="🧠 smart decisions", border_style="bright_magenta", expand=False))
         paths = await Exporter(job.export, job.name).export_all(all_items)
         dash.print_summary(paths)
         if "terminal" in job.export.formats:
@@ -193,6 +198,38 @@ def quick(
         rules=rules,
         follow_links=follow,
         max_depth=depth,
+        export=ExportConfig(formats=formats, output_dir=out_dir, filename=stem),
+    )
+    asyncio.run(_run_job(job, verbose))
+
+
+@app.command()
+def smart(
+    url: str = typer.Argument(..., help="URL to scrape"),
+    item: Optional[str] = typer.Option(None, "--item", help="Override the auto-detected item_selector"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (.json/.csv) or dir"),
+    pages: int = typer.Option(1, "--pages", "-p", help="Max pages to auto-paginate"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """[bold bright_magenta]Let the scraper decide everything[/] — transport, browser-vs-HTTP,
+    and the extraction schema. Give it just a URL; override only what you want."""
+    from core.models import ExportConfig, JobConfig, PaginationConfig
+
+    out_dir, stem, formats = "output/smart", None, ["json", "csv", "terminal"]
+    if output:
+        p = Path(output)
+        if p.suffix:
+            stem, out_dir = p.stem, str(p.parent) or "output/smart"
+            formats = ["json", "terminal"] if p.suffix.lower().lstrip(".") in ("json", "jsonl") else ["csv", "terminal"]
+        else:
+            out_dir = str(p)
+
+    job = JobConfig(
+        name=stem or "smart",
+        urls=[url],
+        mode="smart",                       # the project decides the rest
+        item_selector=item,                 # None unless you override
+        pagination=PaginationConfig(auto=True, max_pages=pages) if pages > 1 else None,
         export=ExportConfig(formats=formats, output_dir=out_dir, filename=stem),
     )
     asyncio.run(_run_job(job, verbose))

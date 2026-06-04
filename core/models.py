@@ -72,7 +72,7 @@ class JobConfig(BaseModel):
     name: str
     description: str = ""
     urls: list[str]
-    mode: Literal["http", "browser", "auto"] = "auto"
+    mode: Literal["http", "browser", "auto", "smart"] = "auto"
 
     # ── anti-detection ────────────────────────────────────────────────────────
     stealth: bool = False              # apply JS stealth patches in browser mode
