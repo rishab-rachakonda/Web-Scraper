@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "greatest-web-scraper"
+version = "0.1.0"
+description = "Async, multi-engine web scraper with smart mode, auto-schema detection, and a beautiful TUI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "httpx[http2]>=0.27.0",
+    "playwright>=1.44.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.2.0",
+    "rich>=13.7.0",
+    "typer>=0.12.0",
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0.1",
+    "aiofiles>=23.2.1",
+    "aiosqlite>=0.20.0",
+    "apscheduler>=3.10.4",
+    "fake-useragent>=1.5.1",
+    "jmespath>=1.0.1",
+    "openpyxl>=3.1.0",
+    "fpdf2>=2.7.0",
+    "curl_cffi>=0.7.0",
+    "playwright-stealth>=1.0.0",
+    "browser-cookie3>=0.19.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+greatest-scraper = "scraper:app"
+
+[tool.setuptools]
+py-modules = ["scraper"]
+packages = ["core", "pipeline", "ui", "scheduler"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
