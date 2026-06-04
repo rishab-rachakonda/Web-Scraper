@@ -212,6 +212,7 @@ def run(
     fmt: Optional[str] = typer.Option(None, "--format", "-f", help="Override output format(s), e.g. csv,pdf,all"),
     ask: bool = typer.Option(False, "--ask", help="Choose output format(s) interactively after scraping"),
     polite: bool = typer.Option(False, "--polite", help="Respect robots.txt (allow/disallow + crawl-delay)"),
+    sitemap: bool = typer.Option(False, "--sitemap", help="Seed URLs from the site's sitemap.xml"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Force HTTP mode (skip Playwright)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed error logs"),
 ):
@@ -223,6 +224,8 @@ def run(
         job.mode = "http"
     if polite:
         job.respect_robots = True
+    if sitemap:
+        job.from_sitemap = True
     if fmt:
         chosen = _parse_format_choice(fmt)
         if not chosen:
@@ -295,6 +298,7 @@ def smart(
              "Omit to be asked interactively."),
     pages: int = typer.Option(1, "--pages", "-p", help="Max pages to auto-paginate"),
     polite: bool = typer.Option(False, "--polite", help="Respect robots.txt"),
+    sitemap: bool = typer.Option(False, "--sitemap", help="Seed URLs from the site's sitemap.xml"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """[bold bright_magenta]Let the scraper decide everything[/] — transport, browser-vs-HTTP,
@@ -317,6 +321,7 @@ def smart(
         mode="smart",                       # the project decides the rest
         item_selector=item,                 # None unless you override
         respect_robots=polite,
+        from_sitemap=sitemap,
         pagination=PaginationConfig(auto=True, max_pages=pages) if pages > 1 else None,
         export=ExportConfig(formats=formats, output_dir=output_dir or "output/smart"),
     )

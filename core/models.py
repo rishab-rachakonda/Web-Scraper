@@ -88,6 +88,8 @@ class JobConfig(BaseModel):
     # ── crawling ──────────────────────────────────────────────────────────────
     concurrency: int = 5               # parallel requests / browser pages
     respect_robots: bool = False       # obey robots.txt (allow/disallow + crawl-delay)
+    from_sitemap: bool = False         # seed URLs from the site's sitemap.xml
+    sitemap_limit: int = 1000          # max URLs to pull from the sitemap
     follow_links: bool = False
     link_selector: str | None = None
     max_depth: int = 1

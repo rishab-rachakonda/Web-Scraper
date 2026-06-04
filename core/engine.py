@@ -160,6 +160,18 @@ class ScraperEngine:
         else:
             self.smart_notes.append("no repeating structure found → whole-page extraction")
 
+    async def _maybe_seed_from_sitemap(self):
+        if not self._job.from_sitemap or not self._job.urls:
+            return
+        from .sitemap import discover_sitemap_urls
+        found = await discover_sitemap_urls(self._job.urls[0], self._job.sitemap_limit)
+        if found:
+            self._job.urls = found
+            self._stats.total_urls = len(found)
+            self.smart_notes.append(f"sitemap discovery: seeded {len(found)} URL(s)")
+        else:
+            self.smart_notes.append("sitemap discovery: none found, using the given URL(s)")
+
     async def _fetch_with_tls(self, url: str) -> str:
         try:
             from .tls_client import TLSClient
@@ -172,6 +184,7 @@ class ScraperEngine:
     async def run(self) -> list[ScrapedItem]:
         self._merge_cookies()
         await self._smart_setup()
+        await self._maybe_seed_from_sitemap()
 
         for url in self._job.urls:
             await self._queue.put((url, 0))
