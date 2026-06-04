@@ -9,21 +9,20 @@ urls:
 
 mode: http
 
+# Emit one record per .country card; each rule below is matched *within* it.
+item_selector: .country
+
 rules:
   - name: name
     selector: .country-name
     transform: strip
-    multiple: true
   - name: capital
     selector: .country-capital
-    multiple: true
   - name: population
     selector: .country-population
     transform: int
-    multiple: true
   - name: area
     selector: .country-area
-    multiple: true
 
 export:
   formats: [json, csv, terminal]

@@ -123,15 +123,18 @@ class ScraperEngine:
 
     # ── HTTP processing ───────────────────────────────────────────────────────
 
+    async def _collect(self, batch: list[ScrapedItem], items: list[ScrapedItem]):
+        for item in batch:
+            items.append(item)
+            await self._notify(item)
+
     async def _process_sequential(self, client, items: list[ScrapedItem]):
         while not self._queue.empty() and len(self._visited) < self._job.max_pages:
             url, depth = await self._queue.get()
             if url in self._visited:
                 continue
             self._visited.add(url)
-            item = await self._scrape_http(client, url, depth)
-            items.append(item)
-            await self._notify(item)
+            await self._collect(await self._scrape_http(client, url, depth), items)
 
     async def _process_concurrent(self, client, items: list[ScrapedItem]):
         sem = asyncio.Semaphore(self._job.concurrency)
@@ -143,7 +146,7 @@ class ScraperEngine:
                 self._visited.add(url)
                 urls.append((url, depth))
 
-        async def fetch(url: str, depth: int) -> ScrapedItem:
+        async def fetch(url: str, depth: int) -> list[ScrapedItem]:
             async with sem:
                 return await self._scrape_http(client, url, depth)
 
@@ -152,11 +155,10 @@ class ScraperEngine:
             return_exceptions=True,
         )
         for r in results:
-            if isinstance(r, ScrapedItem):
-                items.append(r)
-                await self._notify(r)
+            if isinstance(r, list):
+                await self._collect(r, items)
 
-    async def _scrape_http(self, client, url: str, depth: int) -> ScrapedItem:
+    async def _scrape_http(self, client, url: str, depth: int) -> list[ScrapedItem]:
         try:
             resp = await client.get(url)
             self._stats.bytes_downloaded += len(resp.content)
@@ -167,14 +169,23 @@ class ScraperEngine:
                     data = self._extractor.extract_json(resp.json())
                 except Exception:
                     data = self._extractor.extract_json(resp.text)
-            else:
-                data = self._extractor.extract_html(resp.text, url)
-                self._maybe_enqueue_links(resp.text, url, depth)
-                await self._maybe_paginate(resp.text, url)
+                return [ScrapedItem(url=url, data=data, status_code=resp.status_code)]
 
-            return ScrapedItem(url=url, data=data, status_code=resp.status_code)
+            self._maybe_enqueue_links(resp.text, url, depth)
+            await self._maybe_paginate(resp.text, url)
+            return self._build_items(resp.text, url, resp.status_code)
         except Exception as exc:
-            return ScrapedItem(url=url, data={}, error=str(exc))
+            return [ScrapedItem(url=url, data={}, error=str(exc))]
+
+    def _build_items(self, html: str, url: str, status: int) -> list[ScrapedItem]:
+        """One record per `item_selector` match, or a single whole-page record
+        when no item_selector is set (or it matches nothing)."""
+        if self._job.item_selector:
+            records = self._extractor.extract_items(html, self._job.item_selector, url)
+            if records:
+                return [ScrapedItem(url=url, data=rec, status_code=status) for rec in records]
+        data = self._extractor.extract_html(html, url)
+        return [ScrapedItem(url=url, data=data, status_code=status)]
 
     # ── browser processing ────────────────────────────────────────────────────
 
@@ -195,20 +206,18 @@ class ScraperEngine:
                 return_exceptions=True,
             )
             for r in results:
-                if isinstance(r, ScrapedItem):
-                    items.append(r)
-                    await self._notify(r)
+                if isinstance(r, list):
+                    await self._collect(r, items)
 
-    async def _scrape_browser(self, browser, url: str, depth: int) -> ScrapedItem:
+    async def _scrape_browser(self, browser, url: str, depth: int) -> list[ScrapedItem]:
         try:
             content, status = await browser.get_page_content(url)
             self._stats.bytes_downloaded += len(content.encode())
-            data = self._extractor.extract_html(content, url)
             self._maybe_enqueue_links(content, url, depth)
             await self._maybe_paginate(content, url)
-            return ScrapedItem(url=url, data=data, status_code=status)
+            return self._build_items(content, url, status)
         except Exception as exc:
-            return ScrapedItem(url=url, data={}, error=str(exc))
+            return [ScrapedItem(url=url, data={}, error=str(exc))]
 
     # ── helpers ───────────────────────────────────────────────────────────────
 

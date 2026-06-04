@@ -90,6 +90,7 @@ class JobConfig(BaseModel):
     # ── extraction ────────────────────────────────────────────────────────────
     rules: list[ExtractorRule] = Field(default_factory=list)
     output_schema: str | None = None
+    item_selector: str | None = None   # repeating container; emit one record per match
 
     # ── network ───────────────────────────────────────────────────────────────
     headers: dict[str, str] = Field(default_factory=dict)

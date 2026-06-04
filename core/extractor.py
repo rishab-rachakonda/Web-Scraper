@@ -39,6 +39,17 @@ class DataExtractor:
 
         return result
 
+    def extract_items(self, html: str, item_selector: str, base_url: str = "") -> list[dict[str, Any]]:
+        """Emit one record per element matching `item_selector`, with each rule
+        evaluated *within* that container. Turns parallel field-lists into
+        proper per-item rows."""
+        soup = BeautifulSoup(html, "lxml")
+        records: list[dict[str, Any]] = []
+        for container in soup.select(item_selector):
+            record = {rule.name: self._apply_html_rule(container, rule, base_url) for rule in self._rules}
+            records.append(record)
+        return records
+
     def _apply_html_rule(self, soup: BeautifulSoup, rule: ExtractorRule, base_url: str) -> Any:
         elements = []
 

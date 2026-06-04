@@ -66,6 +66,29 @@ export:
 
 See [`example_jobs/`](example_jobs/) for ready-to-run jobs demonstrating TLS bypass, stealth browsing, auto-pagination, and more. Reusable output shapes live in [`schemas/`](schemas/).
 
+### One row per item
+
+By default each rule returns a flat list, giving **one record per page** (all names, all prices…). Set `item_selector` to the repeating container and the scraper emits **one clean record per item**, with each rule matched *inside* that container:
+
+```yaml
+item_selector: .country     # one record per .country card
+rules:
+  - name: name
+    selector: .country-name
+  - name: capital
+    selector: .country-capital
+  - name: population
+    selector: .country-population
+    transform: int
+```
+
+```json
+{"name": "Andorra", "capital": "Andorra la Vella", "population": 84000}
+{"name": "United Arab Emirates", "capital": "Abu Dhabi", "population": 4975593}
+```
+
+See [`example_jobs/countries.yaml`](example_jobs/countries.yaml).
+
 ### Anti-detection options
 
 ```yaml
