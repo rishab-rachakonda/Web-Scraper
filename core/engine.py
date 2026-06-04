@@ -54,6 +54,10 @@ class ScraperEngine:
             from .state import RunStore
             self._store = RunStore(job.name, job.export.output_dir)
 
+        from .logger import get_run_logger, kv
+        self._log = get_run_logger(job.name, job.export.output_dir)
+        self._kv = kv
+
         if job.output_schema:
             self._extractor = DataExtractor(OutputSchema(job.output_schema).to_rules())
         else:
@@ -197,6 +201,8 @@ class ScraperEngine:
             return ""
 
     async def run(self) -> list[ScrapedItem]:
+        self._log.info(self._kv(event="start", job=self._job.name,
+                                 mode=self._job.mode, urls=len(self._job.urls)))
         self._merge_cookies()
         await self._smart_setup()
         await self._maybe_seed_from_sitemap()
@@ -230,6 +236,11 @@ class ScraperEngine:
                     f"changes vs last run: {self._store.new} new/changed, "
                     f"{self._store.unchanged} unchanged")
             self._store.save(finished=True)
+        for note in self.smart_notes:
+            self._log.info(self._kv(event="note", detail=note))
+        failed = sum(1 for i in items if i.error)
+        self._log.info(self._kv(event="done", items=len(items),
+                                 ok=len(items) - failed, failed=failed))
         return items
 
     # ── HTTP processing ───────────────────────────────────────────────────────
@@ -288,9 +299,11 @@ class ScraperEngine:
 
     async def _scrape_http(self, client, url: str, depth: int) -> list[ScrapedItem]:
         if await self._robots_blocks(url):
+            self._log.info(self._kv(event="skip", reason="robots", url=url))
             return []
         try:
             resp = await client.get(url)
+            self._log.info(self._kv(event="fetch", engine="http", status=resp.status_code, url=url))
             self._stats.bytes_downloaded += len(resp.content)
             ct = resp.headers.get("content-type", "")
 
@@ -305,6 +318,7 @@ class ScraperEngine:
             await self._maybe_paginate(resp.text, url)
             return self._build_items(resp.text, url, resp.status_code)
         except Exception as exc:
+            self._log.warning(self._kv(event="error", engine="http", url=url, error=str(exc)))
             return [ScrapedItem(url=url, data={}, error=str(exc))]
 
     def _build_items(self, html: str, url: str, status: int) -> list[ScrapedItem]:
@@ -341,14 +355,17 @@ class ScraperEngine:
 
     async def _scrape_browser(self, browser, url: str, depth: int) -> list[ScrapedItem]:
         if await self._robots_blocks(url):
+            self._log.info(self._kv(event="skip", reason="robots", url=url))
             return []
         try:
             content, status = await browser.get_page_content(url)
+            self._log.info(self._kv(event="fetch", engine="browser", status=status, url=url))
             self._stats.bytes_downloaded += len(content.encode())
             self._maybe_enqueue_links(content, url, depth)
             await self._maybe_paginate(content, url)
             return self._build_items(content, url, status)
         except Exception as exc:
+            self._log.warning(self._kv(event="error", engine="browser", url=url, error=str(exc)))
             return [ScrapedItem(url=url, data={}, error=str(exc))]
 
     # ── helpers ───────────────────────────────────────────────────────────────
