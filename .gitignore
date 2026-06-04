@@ -16,6 +16,11 @@ __pycache__/
 # Scraper output (data artifacts, not source)
 output/
 
+# Loose scrape artifacts in the project root (real output goes in output/)
+/data.csv
+/data.json
+/cls
+
 # Logs / databases
 *.log
 *.sqlite
